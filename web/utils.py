@@ -1246,18 +1246,39 @@ def safemarkdown(text):
         text = markdown(text)
         return text
 
-def sendmail(from_address, to_address, subject, message, headers=None, **kw):
+def sendmail(from_address, to_address, subject, message, headers=None, attachments=None, **kw):
     """
     Sends the email message `message` with mail and envelope headers
     for from `from_address_` to `to_address` with `subject`. 
     Additional email headers can be specified with the dictionary 
     `headers.
+    
+    attachments is a dict 
+      name, content-type, body
 
     If `web.config.smtp_server` is set, it will send the message
     to that SMTP server. Otherwise it will look for 
     `/usr/sbin/sendmail`, the typical location for the sendmail-style
     binary. To use sendmail from a different path, set `web.config.sendmail_path`.
     """
+    import mimetypes
+    try:  # py2.5 onward
+        from email import encoders
+        from email.message import Message
+        from email.mime.audio import MIMEAudio
+        from email.mime.base import MIMEBase
+        from email.mime.image import MIMEImage
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+    except ImportError:  #py 2.2 - 2.4
+        from email import Encoders as encoders
+        from email import Message
+        from email.MIMEAudio import MIMEAudio
+        from email.MIMEBase import MIMEBase
+        from email.MIMEImage import MIMEImage
+        from email.MIMEMultipart import MIMEMultipart
+        from email.MIMEText import MIMEText
+    
     try:
         import webapi
     except ImportError:
@@ -1297,9 +1318,68 @@ def sendmail(from_address, to_address, subject, message, headers=None, **kw):
     import email.Utils
     from_address = email.Utils.parseaddr(from_address)[1]
     recipients = [email.Utils.parseaddr(r)[1] for r in recipients]
-    message = ('\n'.join([safestr('%s: %s' % x) for x in headers.iteritems()])
-      + "\n\n" +  safestr(message))
+    message_body = safestr(message)
 
+    # Create the enclosing (outer) message
+    if attachments:
+        outer = MIMEMultipart()
+        for headername, headervalue in headers.iteritems():
+            outer[headername] = headervalue
+        outer.preamble = 'You will not see this in a MIME-aware mail reader.\n'
+        
+        outer.attach(MIMEText(message_body))
+        for attachment in attachments:
+            # if just given a path, we guess:
+            if isinstance(attachment,(str,unicode)):
+                # Guess the content type based on the file's extension.  Encoding
+                # will be ignored, although we should check for simple things like
+                # gzip'd or compressed files.
+                path = attachment
+                ctype, encoding = mimetypes.guess_type(path)
+            else:
+                try:
+                    ctype = attachement[1]
+                    path = attachement[0]
+                except IndexError, TypeError:
+                    raise ValueError("attachments must be an iterarble, where " +\
+                     "each element is either a (str,unicode) or a two-element "+\
+                     "iterable of form (filename,MIMEtype)")
+                      
+            if ctype is None or encoding is not None:
+                # No guess could be made, or the file is encoded (compressed), so
+                # use a generic bag-of-bits type.
+                ctype = 'application/octet-stream'
+            maintype, subtype = ctype.split('/', 1)
+            if maintype == 'text':
+                fp = open(filename)
+                # Note: we should handle calculating the charset
+                msg = MIMEText(fp.read(), _subtype=subtype)
+                fp.close()
+            elif maintype == 'image':
+                fp = open(path, 'rb')
+                msg = MIMEImage(fp.read(), _subtype=subtype)
+                fp.close()
+            elif maintype == 'audio':
+                fp = open(path, 'rb')
+                msg = MIMEAudio(fp.read(), _subtype=subtype)
+                fp.close()
+            else:
+                fp = open(path, 'rb')
+                msg = MIMEBase(maintype, subtype)
+                msg.set_payload(fp.read())
+                fp.close()
+                # Encode the payload using Base64
+                encoders.encode_base64(msg)
+            # Set the filename parameter
+            msg.add_header('Content-Disposition', 'attachment', filename=path)
+            outer.attach(msg)
+    else:
+        outer = MIMEText(message_body)
+        for headername, headervalue in headers.iteritems():
+            outer[headername] = headervalue
+    
+    message = outer.as_string() 
+    
     if webapi.config.get('smtp_server'):
         server = webapi.config.get('smtp_server')
         port = webapi.config.get('smtp_port', 0)
