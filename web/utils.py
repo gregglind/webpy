@@ -1336,14 +1336,16 @@ def sendmail(from_address, to_address, subject, message, headers=None, attachmen
                 # gzip'd or compressed files.
                 path = attachment
                 ctype, encoding = mimetypes.guess_type(path)
+                attachment_body = open(path,'rb').read()
             else:
                 try:
-                    ctype = attachement[1]
-                    path = attachement[0]
+                    attachment_body = attachment[2]
+                    ctype = attachment[1]
+                    path = attachment[0]
                 except IndexError, TypeError:
                     raise ValueError("attachments must be an iterarble, where " +\
-                     "each element is either a (str,unicode) or a two-element "+\
-                     "iterable of form (filename,MIMEtype)")
+                     "each element is either a (str,unicode) or a three element "+\
+                     "iterable of form (filename,MIMEtype,payload)")
                       
             if ctype is None or encoding is not None:
                 # No guess could be made, or the file is encoded (compressed), so
@@ -1351,23 +1353,15 @@ def sendmail(from_address, to_address, subject, message, headers=None, attachmen
                 ctype = 'application/octet-stream'
             maintype, subtype = ctype.split('/', 1)
             if maintype == 'text':
-                fp = open(filename)
-                # Note: we should handle calculating the charset
-                msg = MIMEText(fp.read(), _subtype=subtype)
-                fp.close()
+                # Note: we should handle calculating the charset, but we don't
+                msg = MIMEText(attachment_body, _subtype=subtype)
             elif maintype == 'image':
-                fp = open(path, 'rb')
-                msg = MIMEImage(fp.read(), _subtype=subtype)
-                fp.close()
+                msg = MIMEImage(attachment_body, _subtype=subtype)
             elif maintype == 'audio':
-                fp = open(path, 'rb')
-                msg = MIMEAudio(fp.read(), _subtype=subtype)
-                fp.close()
+                msg = MIMEAudio(attachment_body, _subtype=subtype)
             else:
-                fp = open(path, 'rb')
                 msg = MIMEBase(maintype, subtype)
-                msg.set_payload(fp.read())
-                fp.close()
+                msg.set_payload(attachment_body)
                 # Encode the payload using Base64
                 encoders.encode_base64(msg)
             # Set the filename parameter
