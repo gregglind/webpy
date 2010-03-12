@@ -1271,13 +1271,19 @@ def sendmail(from_address, to_address, subject, message, headers=None, **kw):
     for a in attachments:
         if isinstance(a, dict):
             mail.attach(a['filename'], a['content'], a.get('content_type'))
-        elif hasattr(a, 'read'): # file
-            filename = getattr(a, "name", "")
-            content_type = getattr(a, 'content_type', None)
-            mail.attach(filename, a.read(), content_type)
-        else:
-            raise ValueError, "Invalid attachment: %s" % repr(a)
-            
+            continue
+        elif hasattr(a, 'read'): # file handle
+            pass
+        else: # assume it is a file path
+            try:
+                a = file(a)
+            except Exception(exc):
+                raise ValueError("Invalid attachment %s" % repr(a))
+
+        filename = getattr(a, "name", "")
+        content_type = getattr(a, 'content_type', None)
+        mail.attach(filename, a.read(), content_type)
+
     mail.send()
         
 class _EmailMessage:
@@ -1320,8 +1326,8 @@ class _EmailMessage:
     def new_message(self):
         try:
             from email.message import Message
-        except:
-            from email import Message
+        except ImportError:
+            from email.Message import Message # Python 2.4, 2.5 
         
         return Message()
         
