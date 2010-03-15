@@ -1324,11 +1324,7 @@ class _EmailMessage:
         self.multipart = False
         
     def new_message(self):
-        try:
-            from email.message import Message
-        except ImportError:
-            from email.Message import Message # Python 2.4, 2.5 
-        
+        from email.Message import Message
         return Message()
         
     def attach(self, filename, content, content_type=None):
