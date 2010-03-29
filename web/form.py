@@ -19,6 +19,15 @@ class Form:
         >>> f = Form(Textbox("x"))
         >>> f.render()
         '<table>\n    <tr><th><label for="x">x</label></th><td><input type="text" id="x" name="x"/></td></tr>\n</table>'
+        
+        # with a checkbox, showing how to 'fill' it.
+        >>> f = Form(Checkbox("checkme",value="checkme",checked=False))
+        >>> f.render()
+        '<table>\n    <tr><th><label for="checkme_checkme">checkme</label></th><td><input type="checkbox" id="checkme_checkme" value="checkme" name="checkme"/></td></tr>\n</table>'
+        >>> f.fill(checkme=True)
+        True
+        >>> f.render()
+        '<table>\n    <tr><th><label for="checkme_checkme">checkme</label></th><td><input checked="checked" type="checkbox" id="checkme_checkme" value="checkme" name="checkme"/></td></tr>\n</table>'
     """
     def __init__(self, *inputs, **kw):
         self.inputs = inputs
@@ -70,7 +79,7 @@ class Form:
             if _validate:
                 out = i.validate(v) and out
             else:
-                i.value = v
+                i.set_value(v)
         if _validate:
             out = out and self._validate(source)
             self.valid = out
